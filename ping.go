@@ -211,6 +211,7 @@ type packet struct {
 	bytes  []byte
 	nbytes int
 	ttl    int
+	src    net.Addr
 }
 
 // Packet represents a received and processed ICMP echo packet.
@@ -587,7 +588,8 @@ func (p *Pinger) recvICMP(
 			}
 			var n, ttl int
 			var err error
-			n, ttl, _, err = conn.ReadFrom(bytes)
+			var src net.Addr
+			n, ttl, src, err = conn.ReadFrom(bytes)
 			if err != nil {
 				if neterr, ok := err.(*net.OpError); ok {
 					if neterr.Timeout() {
@@ -602,7 +604,7 @@ func (p *Pinger) recvICMP(
 			select {
 			case <-p.done:
 				return nil
-			case recv <- &packet{bytes: bytes, nbytes: n, ttl: ttl}:
+			case recv <- &packet{bytes: bytes, src: src, nbytes: n, ttl: ttl}:
 			}
 		}
 	}
@@ -649,10 +651,14 @@ func (p *Pinger) processPacket(recv *packet) error {
 		return nil
 	}
 
+	addr := p.addr
+	if recv.src != nil {
+		addr = recv.src.String()
+	}
 	inPkt := &Packet{
 		Nbytes: recv.nbytes,
 		IPAddr: p.ipaddr,
-		Addr:   p.addr,
+		Addr:   addr,
 		Ttl:    recv.ttl,
 		ID:     p.id,
 	}
